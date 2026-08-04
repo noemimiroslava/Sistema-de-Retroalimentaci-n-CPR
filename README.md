@@ -2,6 +2,15 @@
 
 A new Flutter project.
 
+para instakr thony 
+ es usar mcirptyhon esp32 
+ descragr el bin si por priera vez de aqui 
+ https://micropython.org/download/ESP32_GENERIC/
+
+ para usar el driver de una esp32 es aqui primero descargar thonny
+ https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads
+ 
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
