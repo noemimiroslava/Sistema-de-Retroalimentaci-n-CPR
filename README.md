@@ -126,7 +126,7 @@ A partir de ese momento el ESP32 se anuncia por BLE con el nombre **`ESP32-Noemi
 
 ---
 
-## Parte 2 — Preparar la computadora
+## Parte 2 — Para editar la app desde tu computadora (Si no es necesario pasar a la parte 4)
 
 ### 2.1 Instalar Flutter
 
@@ -201,7 +201,18 @@ flutter run        # compila e instala la app
 
 ---
 
-## Parte 4 — Usar el sistema
+## Solo descargar e instalar la APP en el telefono
+
+📱 **[Descargar APK (Android)](https://github.com/noemimiroslava/Sistema-de-Retroalimentaci-n-CPR/releases/tag/app )**
+
+> Requiere Android 8.0 o superior. Al instalar, Android pedirá permitir la
+> instalación desde fuentes desconocidas. En teléfonos Samsung puede ser
+> necesario desactivar el Bloqueador automático.
+>
+> La app necesita un ESP32 con el firmware de este repositorio para funcionar.
+
+
+## Parte 5 — Usar el sistema
 
 1. Enciende el ESP32. La consola muestra `VL6180X listo` y la placa queda anunciándose por BLE.
 2. Enciende el Bluetooth del teléfono.
