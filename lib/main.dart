@@ -3,7 +3,7 @@
 //  • 0003 PROFUNDIDAD (float little-endian, notify 20 Hz)
 //  • 0004 FRECUENCIA  (float little-endian, notify cada compresión)
 //  • 0005 MODE        (write TRAIN / EVAL)
-//  Requiere flutter_blue_plus ^1.35.4 y permission_handler ^11.1.0
+//  Requiere flutter_blue_plus ^2.3.12 y permission_handler ^11.4.0
 
 import 'dart:async';
 import 'dart:convert';
@@ -17,7 +17,10 @@ import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 
-void main() => runApp(const MyApp());
+void main() {
+  FlutterBluePlus.setLogLevel(LogLevel.verbose, color: true);
+  runApp(const MyApp());
+}
 
 /* ═════════════════════ CONSTANTES BLE ═════════════════════ */
 const _deviceName = 'ESP32-Noemi';
@@ -28,21 +31,16 @@ final Guid _modeUuid  = Guid('19b10005-e8f2-537e-4f6c-d104768a1214');
 
 /* ═════════════════════ BLE WRAPPER ════════════════════════ */
 class BleMsg {
-  //final double prof;   // profundidad cm
-  final double cpm;    // cpm
+  final double cpm;
   final double peak;
   final double prof;
-  //final bool start;
   const BleMsg.prof(this.prof) : peak = 0, cpm  = 0;
-  //const BleMsg.cpm (this.cpm)    : prof = 0; // start = false;
   const BleMsg.comp(this.peak, this.cpm) : prof = 0;
-  //const BleMsg.start()           : prof = 0, cpm = 0, start = true;
 }
 
 class BleChannel {
   final BluetoothDevice dev;
   final BluetoothCharacteristic profC;
-  //final BluetoothCharacteristic freqC;
   final BluetoothCharacteristic dataC;
   final BluetoothCharacteristic modeC;
 
@@ -66,10 +64,6 @@ class BleChannel {
       final cpm  = bd.getFloat32(4, Endian.little);
       _ctrl.add(BleMsg.comp(peak,cpm));
     });
-
-    // “START” tras la primera profundidad > 0
-    // stream.where((m) => m.prof > 0).first
-    //     .then((_) => _ctrl.add(const BleMsg.start()));
   }
 
   Future<void> sendMode(bool train) async =>
@@ -107,7 +101,6 @@ class _ConnectPageState extends State<ConnectPage> {
     final req = [
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
-      //Permission.locationWhenInUse,
     ];
     final res = await req.request();
     return res.values.every((p) => p.isGranted);
@@ -115,44 +108,51 @@ class _ConnectPageState extends State<ConnectPage> {
 
   Future<void> _connect() async {
     setState(() => _status = 'Buscando BLE…');
-    if (!await _perms()) {
-      setState(() => _status = 'Permisos denegados');
-      return;
-    }
+    try {
+      if (!await _perms()) {
+        setState(() => _status = 'Permisos denegados');
+        return;
+      }
 
-    await FlutterBluePlus.startScan(withServices: [_svcUuid]);
-    final res = await FlutterBluePlus.scanResults
-        .expand((e) => e)
-        .firstWhere((r) => r.device.platformName == _deviceName)
-        .timeout(const Duration(seconds: 10),
-            onTimeout: () => throw 'ESP32 no encontrado');
-    await FlutterBluePlus.stopScan();
+      await FlutterBluePlus.startScan(withServices: [_svcUuid]); 
 
-    final dev = res.device;
-    await dev.connect(timeout: const Duration(seconds: 8));
-    final svc = (await dev.discoverServices())
-        .firstWhere((s) => s.uuid == _svcUuid);
+      final res = await FlutterBluePlus.scanResults
+          .expand((e) => e)
+          .firstWhere((r) => r.device.platformName == _deviceName)
+          .timeout(const Duration(seconds: 10),
+              onTimeout: () => throw 'ESP32 no encontrado');
+      await FlutterBluePlus.stopScan();
 
-    final chProf = svc.characteristics
-        .firstWhere((c) => c.uuid == _profUuid);
-    final chFreq = svc.characteristics
-        .firstWhere((c) => c.uuid == _freqUuid);
-    final chMode = svc.characteristics
-        .firstWhere((c) => c.uuid == _modeUuid);
+      final dev = res.device;
+      await dev.connect(
+          license: License.nonprofit, timeout: const Duration(seconds: 8));
+      final svc = (await dev.discoverServices())
+          .firstWhere((s) => s.uuid == _svcUuid);
 
-    final ble = BleChannel(dev, chProf, chFreq, chMode);
-    await ble.init();
+      final chProf = svc.characteristics
+          .firstWhere((c) => c.uuid == _profUuid);
+      final chFreq = svc.characteristics
+          .firstWhere((c) => c.uuid == _freqUuid);
+      final chMode = svc.characteristics
+          .firstWhere((c) => c.uuid == _modeUuid);
 
-    if (!mounted) return;
+      final ble = BleChannel(dev, chProf, chFreq, chMode);
+      await ble.init();
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => Provider.value(
-          value: ble,
-          child: const ModeSelection(),
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => Provider.value(
+            value: ble,
+            child: const ModeSelection(),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      await FlutterBluePlus.stopScan();
+      if (mounted) setState(() => _status = 'Error: $e');
+    }
   }
 
   @override
@@ -168,17 +168,16 @@ class _ConnectPageState extends State<ConnectPage> {
                       fontSize: 25,
                       fontWeight: FontWeight.w700,
                       color: Colors.black)),
-              const SizedBox(height: 24),            // separación
+              const SizedBox(height: 24),
         Image.asset(
-          'assets/logo1.png',               // ruta declarada en pubspec.yaml
-          width: 180,                          // ajustar tamaño a necesidad
+          'assets/logo1.png',
+          width: 180,
           fit: BoxFit.contain,
         ),
               const Text('Enciende tu Bluetooth \n' 'para conectarte con la ESP32\n',textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700)),
-                      //color: Colors.black))
               ElevatedButton.icon(
                 icon: const Icon(Icons.bluetooth_searching),
                 label: const Text('Conectar'),
@@ -215,9 +214,8 @@ class ModeSelection extends StatelessWidget {
     final ble = Provider.of<BleChannel>(context, listen: false);
     return Scaffold(
       appBar: AppBar(title: const Text('Modo')),
-      body: Center(                               // ← centra en ambos ejes
+      body: Center(
         child: Padding(
-          //body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -289,7 +287,6 @@ class SessionControllerBle extends ChangeNotifier {
   final BleChannel ble;
   late final StreamSubscription _sub;
 
-  // métricas
   double depth = 0, bpm = 0, freqHz = 0;
   double freqSum = 0, depthSum = 0;
   int    freqCount = 0, correctComp = 0, totalComp = 0;
@@ -297,7 +294,6 @@ class SessionControllerBle extends ChangeNotifier {
   bool   _started = false, _finished = false;
   late final Timer _timeoutTimer;
 
-  // audio
   final AudioPlayer _player = AudioPlayer();
   bool _tickLoaded = false, _soundPlaying = false;
   final Stopwatch _timer = Stopwatch();
@@ -319,16 +315,14 @@ class SessionControllerBle extends ChangeNotifier {
   final now = DateTime.now().millisecondsSinceEpoch;
 
   if (m.cpm == 0 && m.peak == 0) {
-    depth = m.prof.clamp(0, 6);        // barra en vivo
-    notifyListeners();                 // repinta UI
-    return;                            // no toca estadísticas
+    depth = m.prof.clamp(0, 6);
+    notifyListeners();
+    return;
   }
 
   final peak = m.peak;
   final cpm  = m.cpm;
 
-
-  /* 1. Arranque automático con la 1.ª profundidad > 0 */
   if (!_started && m.peak > 0) {
     _started = true;
     _timer.start();
@@ -342,12 +336,8 @@ class SessionControllerBle extends ChangeNotifier {
     }
   }
 
-  /* 2. Actualiza profundidad siempre, incluso 0 cm */
   depth     = m.peak.clamp(0, 6);
 
-
-
-  /* 3. Procesa compresiones */
   if (m.cpm > 0) {
     bpm       = m.cpm;
     freqHz    = m.cpm / 60;
@@ -362,20 +352,16 @@ class SessionControllerBle extends ChangeNotifier {
     lastCycleEnd  = now;
   }
 
-  /* 4. Finaliza a los 60 s */
   if (!_finished && _timer.elapsedMilliseconds >= 60000) {
-  _finish();                              // antes ponía código duplicado
-}
+    _finish();
+  }
 
   notifyListeners();
 }
 
-
-  // getters de estado
   bool get finished => _finished;
   int  get remaining => (60 - _timer.elapsed.inSeconds).clamp(0, 60);
 
-  // resumen
   int    get correct => correctComp;
   int    get total   => totalComp;
   double get avgCpm  => freqCount == 0 ? 0 : freqSum / freqCount;
@@ -383,12 +369,12 @@ class SessionControllerBle extends ChangeNotifier {
   double get fracCp  => fullCyclesMs / 60000.0;
 
   Future<void> _finish() async {
-  if (_finished) return;                 // por si llega dos veces
+  if (_finished) return;
   _finished = true;
   _timeoutTimer.cancel();
   await _sub.cancel();
   if (_soundPlaying) await _player.stop();
-  notifyListeners();                     // actualiza la UI
+  notifyListeners();
 }
 
   @override
@@ -408,7 +394,6 @@ class CprSession extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctl = context.watch<SessionControllerBle>();
 
-    // salto a resumen
     if (ctl.finished) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushReplacement(
@@ -418,7 +403,6 @@ class CprSession extends StatelessWidget {
               total:    ctl.total,
               freqAvg:  ctl.avgCpm,
               depthAvg: ctl.avgDepth,
-              //frac:     ctl.fracCp,
             ),
           ),
         );
@@ -428,13 +412,11 @@ class CprSession extends StatelessWidget {
     return Scaffold(backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text(ctl.mode == SessionMode.train ? 'Entrenamiento' : 'Evaluación'),
-        //backgroundColor: Colors.black,
       ),
       body: Center(
-        child: SingleChildScrollView(child: DefaultTextStyle(                    // ← aplica a todo lo de abajo
+        child: SingleChildScrollView(child: DefaultTextStyle(
         style: const TextStyle(
-          color: Colors.white               // color por defecto
-          //fontSize: 16,                           // (opcional) tamaño base
+          color: Colors.white
         ),
           child: Column(
             children: [
@@ -496,7 +478,7 @@ class CpmGauge extends StatelessWidget {
           minimum: 30,
           maximum: 181,
           interval: 30,
-          axisLabelStyle: const GaugeTextStyle(  // ← ② color blanco
+          axisLabelStyle: const GaugeTextStyle(
               color : Colors.white),
           ranges: [
             GaugeRange(
@@ -535,30 +517,27 @@ class CpmGauge extends StatelessWidget {
 
 /* ───── Barra de profundidad detallada ─────────────────── */
 class _DepthBar extends StatelessWidget {
-  final double avg;                // profundidad promedio
+  final double avg;
 
   const _DepthBar(this.avg, {super.key});
 
   @override
   Widget build(BuildContext context) {
     final double fullW = MediaQuery.of(context).size.width * 0.85;
-    final double posX  = (avg.clamp(0, 8) / 8) * fullW;   // posición de la flecha
+    final double posX  = (avg.clamp(0, 8) / 8) * fullW;
 
     return SizedBox(
       width: fullW,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // barra + marcas
           CustomPaint(
-            size: Size(fullW, 25),          // 18 px barra + 6 ticks + 10 para números
+            size: Size(fullW, 25),
             painter: _DepthPainter(),
           ),
 
-          // flecha indicadora
-                    // flecha indicadora
           Positioned(
-            left: posX - 18,                // centra la punta
+            left: posX - 18,
             top: -14,
             child: Column(
               children: [
@@ -584,23 +563,19 @@ class _DepthPainter extends CustomPainter {
     final Paint red   = Paint()..color = Colors.red;
     final Paint green = Paint()..color = Colors.green;
 
-    // 0-5 cm → rojo
     canvas.drawRect(
       Rect.fromLTWH(0, 0, sz.width * 5 / totalCm, barH),
       red,
     );
-    // 5-6 cm → verde
     canvas.drawRect(
       Rect.fromLTWH(sz.width * 5 / totalCm, 0, sz.width / totalCm, barH),
       green,
     );
-    // 6-8 cm → rojo
     canvas.drawRect(
       Rect.fromLTWH(sz.width * 6 / totalCm, 0, sz.width * 2 / totalCm, barH),
       red,
     );
 
-    // ─ Marcas y números ─
     final Paint tick = Paint()
       ..color = Colors.black
       ..strokeWidth = 1;
@@ -609,9 +584,7 @@ class _DepthPainter extends CustomPainter {
 
     for (int cm = 0; cm <= totalCm; cm++) {
       final double x = cm * sz.width / totalCm;
-      // tick
       canvas.drawLine(Offset(x, barH), Offset(x, barH + 6), tick);
-      // número
       final tp = TextPainter(
         text: TextSpan(text: '$cm', style: textStyle),
         textDirection: TextDirection.ltr,
@@ -637,7 +610,6 @@ class SummaryPage extends StatelessWidget {
     required this.depthAvg,
   });
 
-  /* ─── Cálculo de puntuación ─── */
   double _pctCorrect() => total == 0 ? 0 : correct / total;
 
   double _pctFreq() {
@@ -656,7 +628,6 @@ class SummaryPage extends StatelessWidget {
 
   int _score() => (((_pctCorrect() + _pctFreq() + _pctDepth()) / 3) * 100).round();
 
-  /* ─── Widget reutilizable: aro circular ─── */
   Widget _ring(double val, Color ringColor, double size,
       {String? suffix, Color textColor = Colors.black}) =>
       SizedBox(
@@ -716,7 +687,6 @@ class SummaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    /* 1. Guardar la sesión en el historial (solo una vez) */
     Future.microtask(() async {
       await HistoryStore.add(SessionSummary(
         ts: DateTime.now(),
@@ -728,7 +698,6 @@ class SummaryPage extends StatelessWidget {
       ));
     });
 
-    /* 2. UI */
     final w = MediaQuery.of(context).size.width;
     final gSz = w * .42;
     final pctCorrect100 = (_pctCorrect() * 100).roundToDouble();
@@ -742,11 +711,10 @@ class SummaryPage extends StatelessWidget {
         elevation: 0,
       ),
       body: Center(
-        child: SingleChildScrollView(          // ← evita overflow en pantallas pequeñas
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              /* Calificación total */
               const Text('Calificación Total',
                   style: TextStyle(
                       fontSize: 20,
@@ -755,7 +723,6 @@ class SummaryPage extends StatelessWidget {
               _ring(_score().toDouble(), Colors.blue, gSz,
                   textColor: Colors.black),
 
-              /* % de compresiones correctas */
               const SizedBox(height: 8),
               const Text('Porcentaje de compresiones correctas',
                   style: TextStyle(
@@ -767,7 +734,6 @@ class SummaryPage extends StatelessWidget {
               Text('$correct compresiones correctas de $total totales',
                   style: const TextStyle(fontSize: 14, color: Colors.black)),
 
-              /* Promedio de CPM (gauge) */
               const SizedBox(height: 8),
               const Text('Promedio de Compresiones por minuto',
                   style: TextStyle(
@@ -817,22 +783,21 @@ class SummaryPage extends StatelessWidget {
                           knobStyle: const KnobStyle(color: Colors.black)),
                     ],
                   
-                    /* ─────  Etiquetas de los rangos  ───── */
         annotations: [
-          GaugeAnnotation(                       // ROJO → “Muy lento”
+          GaugeAnnotation(
             widget: const Text(
               'Muy lento',
               style: TextStyle(color: Colors.black, fontSize: 12),
             ),
-            angle          : 150,                // ≈ mitad 60-100
-            positionFactor : .8,                 // un poco hacia dentro
+            angle          : 150,
+            positionFactor : .8,
           ),
-          GaugeAnnotation(                       // ÁMBAR → “Muy rápido”
+          GaugeAnnotation(
             widget: const Text(
               'Muy rápido',
               style: TextStyle(color: Colors.black, fontSize: 12),
             ),
-            angle          : 30,                 // ≈ mitad 120-180
+            angle          : 30,
             positionFactor : .8,
           )],
                   )
@@ -844,7 +809,6 @@ class SummaryPage extends StatelessWidget {
                   style:
                       const TextStyle(fontSize: 14, color: Colors.black)),
 
-              /* Profundidad media */
               const SizedBox(height: 8),
               const Text('Profundidad promedio',
                   style: TextStyle(
@@ -860,7 +824,6 @@ class SummaryPage extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.black)),
 
-              /* Botones */
               const SizedBox(height: 8),
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
@@ -889,8 +852,6 @@ class SummaryPage extends StatelessWidget {
   }
 }
 
-//  ─────────────────  BLOQUES AÑADIDOS  ─────────────────────
-//  1.  MODELO Y UTILIDADES DE HISTORIAL
 class SessionSummary {
   final DateTime ts;
   final int score, correct, total;
@@ -946,7 +907,6 @@ class HistoryStore {
   }
 }
 
-//  ─────────────────  PANTALLA HISTORIAL  ──────────────────
 class LastSessionsPage extends StatelessWidget {
   const LastSessionsPage({super.key});
 
@@ -981,7 +941,6 @@ class LastSessionsPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // FILA 1  Fecha  +  Score
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -998,7 +957,6 @@ class LastSessionsPage extends StatelessWidget {
                           ],
                         ),
                         const Divider(),
-                        // FILA 2  Métricas
                         _kv('Compresiones correctas', '$pct %'),
                         _kv('Correctas / Total', '${s.correct} / ${s.total}'),
                         _kv('Prom. CPM', s.avgCpm.toStringAsFixed(1)),
@@ -1013,7 +971,6 @@ class LastSessionsPage extends StatelessWidget {
         ),
       );
 
-  // --- helpers internos ---
   Widget _kv(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
