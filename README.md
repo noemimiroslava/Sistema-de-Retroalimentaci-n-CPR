@@ -118,7 +118,7 @@ Si no tienes WiFi en el ESP32, puedes descargar los archivos de `aioble` del rep
 
 ### 1.5 Cargar el programa principal
 
-1. Abre el archivo del firmware (el código del `BleCprDevice`) en Thonny.
+1. Abre el archivo del firmware ESP32 en Thonny.
 2. Guárdalo en el ESP32 con el nombre **`main.py`** — así se ejecuta automáticamente cada vez que se enciende la placa.
 3. Reinicia el ESP32. En la consola debe aparecer `VL6180X listo`.
 
