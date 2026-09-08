@@ -201,7 +201,7 @@ flutter run        # compila e instala la app
 
 ---
 
-## Solo descargar e instalar la APP en el telefono
+## Parte 4 Descargar e instalar la APP en el telefono
 
 📱 **[Descargar APK (Android)](https://github.com/noemimiroslava/Sistema-de-Retroalimentaci-n-CPR/releases/tag/app )**
 
