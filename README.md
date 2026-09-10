@@ -60,17 +60,17 @@ El ESP32 lee la distancia del sensor 20 veces por segundo, detecta cada compresi
 |---|---|
 | ESP32 | Cualquier placa de desarrollo estándar |
 | Sensor VL6180X | Sensor de distancia Time-of-Flight (I2C) |
-| Tira NeoPixel (WS2812) | 76 LEDs en la configuración actual |
-| LED indicador | Conectado al pin 14 |
-| Cable USB | Para programar el ESP32 |
+| 2 Tiras y Aro NeoPixel | 32 LEDs en la configuración actual |
+| Mini 360 | Para bajar el voltaje del portapilas |
+| Portapilas para 4 pilas AA de 1,5V | Alimentación de los neopixels |
+| Cable USB | Para programar y alimentar el ESP32 |
 | Maniquí o estructura de pruebas | Donde se monta el sensor |
 
 ### Conexiones
 
 | Componente | Pin del ESP32 |
 |---|---|
-| NeoPixel (datos) | GPIO 27 |
-| LED | GPIO 14 |
+| NeoPixel (datos) | GPIO 27 mas resistencia 330 ohms|
 | VL6180X — SCL | GPIO 18 |
 | VL6180X — SDA | GPIO 19 |
 
@@ -211,15 +211,24 @@ flutter run        # compila e instala la app
 >
 > La app necesita un ESP32 con el firmware de este repositorio para funcionar.
 
+## Parte 5 — Conexión de los neopixeles
 
-## Parte 5 — Usar el sistema
+1. Conecta el portapilas con interruptor ON/OFF al IN + y IN - del mini 360.
+2. Configura la salida OUT + y OUT - del mini 360 a 4.2 V.
+3. Conecta en paralelo el VCC y GND de los neopixeles.
+4. Conecta el VCC al OUT + y el GND al OUT - del mini 360.
+5. Conecta en serie la salida del GPIO 27 junto con una resistencia a la primera entrada en los DIN y DOUT de los neopixesles.
+6. Conecta el GND de los neopixeles con el GND de la ESP32.
 
-1. Enciende el ESP32. La consola muestra `VL6180X listo` y la placa queda anunciándose por BLE.
-2. Enciende el Bluetooth del teléfono.
-3. Abre la app y presiona **Conectar**. Concede el permiso de *dispositivos cercanos* cuando lo pida.
-4. Elige el modo: **Evaluación** o **Entrenamiento**.
-5. Comienza las compresiones. La sesión arranca automáticamente con la primera compresión detectada y dura 60 segundos.
-6. Al terminar aparece el resumen con la calificación, y la sesión se guarda en el historial (últimas 5 sesiones).
+## Parte 6 — Usar el sistema
+
+1. Enciende el interruptor del portapilas que alimenta a los neopixeles.
+2. Conecta el ESP32. La consola muestra `VL6180X listo` y la placa queda anunciándose por BLE.
+3. Enciende el Bluetooth del teléfono.
+4. Abre la app y presiona **Conectar**. Concede el permiso de *dispositivos cercanos* cuando lo pida.
+5. Elige el modo: **Evaluación** o **Entrenamiento**.
+6. Comienza las compresiones. La sesión arranca automáticamente con la primera compresión detectada y dura 60 segundos.
+7. Al terminar aparece el resumen con la calificación, y la sesión se guarda en el historial (últimas 5 sesiones).
 
 ---
 
