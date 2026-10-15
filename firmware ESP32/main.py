@@ -123,7 +123,7 @@ class BleCprDevice:
     async def _ble_task(self):
         while True:
             async with await aioble.advertise(
-                    250_000, name="ESP32-Noemi", services=[self.SVC]
+                    250_000, name="ESP32-RCP", services=[self.SVC]
             ) as conn:
                 print("✓ central connected:", conn.device)
                 task = asyncio.create_task(self._cpr_loop(conn))

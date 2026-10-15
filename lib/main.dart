@@ -23,7 +23,7 @@ void main() {
 }
 
 /* ═════════════════════ CONSTANTES BLE ═════════════════════ */
-const _deviceName = 'ESP32-Noemi';
+const _deviceName = 'ESP32-RCP';
 final Guid _svcUuid   = Guid('19b10002-e8f2-537e-4f6c-d104768a1214');
 final Guid _profUuid  = Guid('19b10003-e8f2-537e-4f6c-d104768a1214');
 final Guid _freqUuid  = Guid('19b10004-e8f2-537e-4f6c-d104768a1214');
